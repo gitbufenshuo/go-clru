@@ -37,6 +37,11 @@ func TestGet(t *testing.T) {
 		t.Fatal("data is lost")
 	}
 
+	e, ok := c.GetEntry("key")
+	if e.ATime == e.CTime {
+		t.Fatal("ATime eq CTime")
+	}
+
 	rs := r.(*TestStruct)
 	if rs.N != 1 || rs.S != "one" {
 		t.Fatal("wtf!")

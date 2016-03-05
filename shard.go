@@ -8,11 +8,11 @@ import (
 type LRUShard struct {
 	sync.Mutex
 	lst   *list.List
-	table map[interface{}]*list.Element
+	table map[Key]*list.Element
 }
 
 func newShard() *LRUShard {
-	return &LRUShard{lst: list.New(), table: make(map[interface{}]*list.Element)}
+	return &LRUShard{lst: list.New(), table: make(map[Key]*list.Element)}
 }
 
 func (s *LRUShard) PutIfAbsent(entry *Entry) {

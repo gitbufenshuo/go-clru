@@ -1,13 +1,11 @@
 package clru
 
 import (
-	// "bytes"
 	"container/list"
 	"encoding/gob"
 	"fmt"
 	"hash/fnv"
 	"io"
-	"math"
 	"os"
 	"time"
 )
@@ -18,15 +16,13 @@ const NoExpiration time.Duration = 0
 type CLRU struct {
 	MaxEntries int
 	TTL        time.Duration
+	maxEPS     int
+	shards     []*LRUShard
 	OnEvicted  Callback
-
-	maxEPS int
-	shards []*LRUShard
 }
 
 func New(maxEntries int, ttl time.Duration) *CLRU {
-	maxEPS := int(math.Ceil(float64(maxEntries) / float64(NUM_SHARD)))
-
+	maxEPS := (maxEntries / NUM_SHARD) + 1
 	shards := make([]*LRUShard, NUM_SHARD, NUM_SHARD)
 	for i := 0; i < NUM_SHARD; i++ {
 		shards[i] = newShard()
@@ -66,17 +62,8 @@ func NewWithFile(maxEntries int, ttl time.Duration, filename string) (c *CLRU, e
 }
 
 func (c *CLRU) getShard(key Key) *LRUShard {
-	// var buf bytes.Buffer
-	// enc := gob.NewEncoder(&buf)
-	// err := enc.Encode(key)
-	// if err != nil {
-	// panic("the key cannot convert to []byte")
-	// }
-	// b := buf.Bytes()
-	b := []byte(key)
-
 	hasher := fnv.New32()
-	hasher.Write(b)
+	hasher.Write([]byte(key))
 	return c.shards[uint(hasher.Sum32())%uint(NUM_SHARD)]
 }
 
@@ -107,7 +94,6 @@ func (c *CLRU) removeElement(shard *LRUShard, el *list.Element) {
 func (c *CLRU) Add(key Key, value interface{}) {
 	shard := c.getShard(key)
 	shard.Lock()
-
 	if entry, found := c.getEntry(shard, key); found {
 		entry.Value = value
 	} else {
@@ -124,11 +110,11 @@ func (c *CLRU) Add(key Key, value interface{}) {
 func (c *CLRU) Get(key Key) (value interface{}, found bool) {
 	shard := c.getShard(key)
 	shard.Lock()
-	if entry, found := c.getEntry(shard, key); found {
-		shard.Unlock()
-		return entry.Value, true
-	}
+	entry, found := c.getEntry(shard, key)
 	shard.Unlock()
+	if found {
+		value = entry.Value
+	}
 	return
 }
 
@@ -142,7 +128,6 @@ func (c *CLRU) GetEntry(key Key) (entry *Entry, found bool) {
 func (c *CLRU) Update(key Key, op Callback) (entry *Entry, found bool) {
 	shard := c.getShard(key)
 	shard.Lock()
-
 	if entry, found = c.getEntry(shard, key); found {
 		op(entry)
 	}

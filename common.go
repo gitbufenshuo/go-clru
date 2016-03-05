@@ -10,8 +10,8 @@ type Value interface{}
 type Entry struct {
 	Key   Key
 	Value Value
-	CTime time.Time
-	ATime time.Time
+	CTime time.Time // create time
+	ATime time.Time // attach time
 }
 
 type Callback func(entry *Entry)
