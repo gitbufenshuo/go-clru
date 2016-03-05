@@ -3,6 +3,7 @@ package clru
 import (
 	// "fmt"
 	"os"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -118,10 +119,10 @@ func TestSerialize(t *testing.T) {
 
 func BenchmarkAdd(b *testing.B) {
 	var wg sync.WaitGroup
-	c := New(16, NoExpiration)
+	core := runtime.NumCPU()
+	c := New(10000, NoExpiration)
 	ch := make(chan int, 100000000)
-	b.ResetTimer()
-	for i := 0; i < 32; i++ {
+	for i := 0; i < core*4; i++ {
 		wg.Add(1)
 		go func() {
 			for i := range ch {
@@ -130,7 +131,7 @@ func BenchmarkAdd(b *testing.B) {
 			wg.Done()
 		}()
 	}
-
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ch <- i
 	}
