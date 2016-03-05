@@ -4,11 +4,12 @@ import (
 	"time"
 )
 
-type Key interface{}
+type Key string
+type Value interface{}
 
 type Entry struct {
 	Key   Key
-	Value interface{}
+	Value Value
 	CTime time.Time
 	ATime time.Time
 }

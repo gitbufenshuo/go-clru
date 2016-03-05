@@ -117,7 +117,7 @@ func BenchmarkAdd(b *testing.B) {
 		wg.Add(1)
 		go func() {
 			for i := range ch {
-				c.Add(i, i)
+				c.Add(Key(i), i)
 			}
 			wg.Done()
 		}()

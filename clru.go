@@ -1,7 +1,7 @@
 package clru
 
 import (
-	"bytes"
+	// "bytes"
 	"container/list"
 	"encoding/gob"
 	"fmt"
@@ -66,14 +66,14 @@ func NewWithFile(maxEntries int, ttl time.Duration, filename string) (c *CLRU, e
 }
 
 func (c *CLRU) getShard(key Key) *LRUShard {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(key)
-	if err != nil {
-		panic("the key cannot convert to []byte")
-	}
-	b := buf.Bytes()
-	//b := []byte(key)
+	// var buf bytes.Buffer
+	// enc := gob.NewEncoder(&buf)
+	// err := enc.Encode(key)
+	// if err != nil {
+	// panic("the key cannot convert to []byte")
+	// }
+	// b := buf.Bytes()
+	b := []byte(key)
 
 	hasher := fnv.New32()
 	hasher.Write(b)
@@ -144,7 +144,6 @@ func (c *CLRU) Update(key Key, op Callback) (entry *Entry, found bool) {
 	shard.Lock()
 
 	if entry, found = c.getEntry(shard, key); found {
-		shard.Unlock()
 		op(entry)
 	}
 	shard.Unlock()
