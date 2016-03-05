@@ -17,13 +17,14 @@ type CLRU struct {
 	MaxEntries int
 	TTL        time.Duration
 	maxEPS     int
-	shards     []*LRUShard
-	OnEvicted  Callback
+	shards     []*lruShard
+	// will be called when evict
+	OnEvicted Callback
 }
 
 func New(maxEntries int, ttl time.Duration) *CLRU {
 	maxEPS := (maxEntries / NUM_SHARD) + 1
-	shards := make([]*LRUShard, NUM_SHARD, NUM_SHARD)
+	shards := make([]*lruShard, NUM_SHARD, NUM_SHARD)
 	for i := 0; i < NUM_SHARD; i++ {
 		shards[i] = newShard()
 	}
@@ -50,13 +51,13 @@ func NewWithFile(maxEntries int, ttl time.Duration, fname string) (c *CLRU, err 
 	return NewWithReader(maxEntries, ttl, f)
 }
 
-func (c *CLRU) getShard(key Key) *LRUShard {
+func (c *CLRU) getShard(key Key) *lruShard {
 	hasher := fnv.New32()
 	hasher.Write([]byte(key))
 	return c.shards[uint(hasher.Sum32())%uint(NUM_SHARD)]
 }
 
-func (c *CLRU) getEntry(shard *LRUShard, key Key) (entry *Entry, found bool) {
+func (c *CLRU) getEntry(shard *lruShard, key Key) (entry *Entry, found bool) {
 	var el *list.Element
 	if el, found = shard.Get(key); !found {
 		return
@@ -72,7 +73,7 @@ func (c *CLRU) getEntry(shard *LRUShard, key Key) (entry *Entry, found bool) {
 	return
 }
 
-func (c *CLRU) removeElement(shard *LRUShard, el *list.Element) {
+func (c *CLRU) removeElement(shard *lruShard, el *list.Element) {
 	shard.Remove(el)
 	if c.OnEvicted != nil {
 		//dead lock?
@@ -115,6 +116,7 @@ func (c *CLRU) GetEntry(key Key) (entry *Entry, found bool) {
 	return
 }
 
+// better not to lock in the callback
 func (c *CLRU) Update(key Key, op Callback) (entry *Entry, found bool) {
 	shard := c.getShard(key)
 	shard.Lock()
