@@ -27,7 +27,6 @@ func New(maxEntries int, ttl time.Duration) *CLRU {
 	for i := 0; i < NUM_SHARD; i++ {
 		shards[i] = newShard()
 	}
-
 	return &CLRU{
 		MaxEntries: maxEntries,
 		TTL:        ttl,
@@ -38,22 +37,12 @@ func New(maxEntries int, ttl time.Duration) *CLRU {
 
 func NewWithReader(maxEntries int, ttl time.Duration, r io.Reader) (c *CLRU, err error) {
 	c = New(maxEntries, ttl)
-	dec := gob.NewDecoder(r)
-	for {
-		var e Entry
-		if err := dec.Decode(&e); err != nil {
-			if err == io.EOF {
-				return c, nil
-			}
-			return nil, err
-		} else {
-			c.getShard(e.Key).PutIfAbsent(&e)
-		}
-	}
+	err = c.Load(r)
+	return
 }
 
-func NewWithFile(maxEntries int, ttl time.Duration, filename string) (c *CLRU, err error) {
-	f, err := os.Open(filename)
+func NewWithFile(maxEntries int, ttl time.Duration, fname string) (c *CLRU, err error) {
+	f, err := os.Open(fname)
 	defer f.Close()
 	if err != nil {
 		return
@@ -74,13 +63,13 @@ func (c *CLRU) getEntry(shard *LRUShard, key Key) (entry *Entry, found bool) {
 	}
 	entry = el.Value.(*Entry)
 	now := time.Now()
-	if c.TTL != NoExpiration && now.Sub(entry.ATime) > c.TTL {
+	if c.TTL != NoExpiration && now.Sub(entry.CTime) > c.TTL {
 		c.removeElement(shard, el)
 		return entry, false
 	}
 	entry.ATime = now
 	shard.Offer(el)
-	return entry, true
+	return
 }
 
 func (c *CLRU) removeElement(shard *LRUShard, el *list.Element) {
@@ -99,8 +88,8 @@ func (c *CLRU) Add(key Key, value interface{}) {
 	} else {
 		now := time.Now()
 		entry = &Entry{Key: key, Value: value, ATime: now, CTime: now}
-		shard.PutIfAbsent(entry)
-		for shard.Len() > c.maxEPS {
+		shard.Put(entry)
+		if shard.Len() > c.maxEPS {
 			c.removeElement(shard, shard.Oldest())
 		}
 	}
@@ -121,8 +110,9 @@ func (c *CLRU) Get(key Key) (value interface{}, found bool) {
 func (c *CLRU) GetEntry(key Key) (entry *Entry, found bool) {
 	shard := c.getShard(key)
 	shard.Lock()
-	defer shard.Unlock()
-	return c.getEntry(shard, key)
+	entry, found = c.getEntry(shard, key)
+	shard.Unlock()
+	return
 }
 
 func (c *CLRU) Update(key Key, op Callback) (entry *Entry, found bool) {
@@ -138,14 +128,10 @@ func (c *CLRU) Update(key Key, op Callback) (entry *Entry, found bool) {
 func (c *CLRU) Evict(key Key) {
 	shard := c.getShard(key)
 	shard.Lock()
-
-	if el, found := shard.Get(key); !found {
-		shard.Unlock()
-		return
-	} else {
+	if el, found := shard.Get(key); found {
 		c.removeElement(shard, el)
-		shard.Unlock()
 	}
+	shard.Unlock()
 }
 
 func (c *CLRU) Len() int {
@@ -173,6 +159,30 @@ func (c *CLRU) Iter() <-chan *Entry {
 		close(ch)
 	}()
 	return ch
+}
+
+func (c *CLRU) Load(r io.Reader) error {
+	dec := gob.NewDecoder(r)
+	for {
+		var entry Entry
+		if err := dec.Decode(&entry); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		} else {
+			c.getShard(entry.Key).PutIfAbsent(&entry)
+		}
+	}
+}
+
+func (c *CLRU) LoadFile(fname string) error {
+	f, err := os.Open(fname)
+	defer f.Close()
+	if err != nil {
+		return err
+	}
+	return c.Load(f)
 }
 
 func (c *CLRU) Save(w io.Writer) (err error) {

@@ -85,6 +85,7 @@ func TestTTL(t *testing.T) {
 }
 
 func TestSerialize(t *testing.T) {
+	var err error
 	c := New(1, NoExpiration)
 
 	c.Add("key1", 1)
@@ -92,13 +93,16 @@ func TestSerialize(t *testing.T) {
 
 	fname := os.TempDir() + "/clru.test.data"
 
-	if err := c.SaveFile(fname); err != nil {
+	if err = c.SaveFile(fname); err != nil {
 		t.Fatal("save failed", err)
 	}
 
-	var err error
+	if err = c.LoadFile(fname); err != nil {
+		t.Fatal("load file failed", err)
+	}
+
 	if c, err = NewWithFile(1, NoExpiration, fname); err != nil {
-		t.Fatal("load failed", err)
+		t.Fatal("new with file failed", err)
 	}
 
 	if v, ok := c.Get("key1"); !ok || v.(int) != 1 {
@@ -114,11 +118,10 @@ func TestSerialize(t *testing.T) {
 
 func BenchmarkAdd(b *testing.B) {
 	var wg sync.WaitGroup
-	c := New(1000, NoExpiration)
-
-	ch := make(chan int, 10000)
-
-	for i := 0; i < 64; i++ {
+	c := New(16, NoExpiration)
+	ch := make(chan int, 100000000)
+	b.ResetTimer()
+	for i := 0; i < 32; i++ {
 		wg.Add(1)
 		go func() {
 			for i := range ch {

@@ -15,17 +15,19 @@ func newShard() *LRUShard {
 	return &LRUShard{lst: list.New(), table: make(map[Key]*list.Element)}
 }
 
-func (s *LRUShard) PutIfAbsent(entry *Entry) {
-	if _, found := s.table[entry.Key]; found {
-		return
-	}
-	el := s.lst.PushFront(entry)
-	s.table[entry.Key] = el
+func (s *LRUShard) Get(key Key) (el *list.Element, found bool) {
+	el, found = s.table[key]
+	return
 }
 
-func (s *LRUShard) Get(key Key) (el *list.Element, ok bool) {
-	el, ok = s.table[key]
-	return
+func (s *LRUShard) Put(entry *Entry) {
+	s.table[entry.Key] = s.lst.PushFront(entry)
+}
+
+func (s *LRUShard) PutIfAbsent(entry *Entry) {
+	if _, found := s.table[entry.Key]; !found {
+		s.Put(entry)
+	}
 }
 
 func (s *LRUShard) Oldest() (el *list.Element) {
