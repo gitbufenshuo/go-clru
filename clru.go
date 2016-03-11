@@ -51,13 +51,13 @@ func NewWithFile(maxEntries int, ttl time.Duration, fname string) (c *CLRU, err 
 	return NewWithReader(maxEntries, ttl, f)
 }
 
-func (c *CLRU) getShard(key Key) *lruShard {
+func (c *CLRU) getShard(key string) *lruShard {
 	hasher := fnv.New32()
 	hasher.Write([]byte(key))
 	return c.shards[uint(hasher.Sum32())%uint(NUM_SHARD)]
 }
 
-func (c *CLRU) getEntry(shard *lruShard, key Key) (entry *Entry, found bool) {
+func (c *CLRU) getEntry(shard *lruShard, key string) (entry *Entry, found bool) {
 	var el *list.Element
 	if el, found = shard.Get(key); !found {
 		return
@@ -81,7 +81,7 @@ func (c *CLRU) removeElement(shard *lruShard, el *list.Element) {
 	}
 }
 
-func (c *CLRU) Add(key Key, value interface{}) {
+func (c *CLRU) Add(key string, value interface{}) {
 	shard := c.getShard(key)
 	shard.Lock()
 	if entry, found := c.getEntry(shard, key); found {
@@ -97,7 +97,7 @@ func (c *CLRU) Add(key Key, value interface{}) {
 	shard.Unlock()
 }
 
-func (c *CLRU) Get(key Key) (value interface{}, found bool) {
+func (c *CLRU) Get(key string) (value interface{}, found bool) {
 	shard := c.getShard(key)
 	shard.Lock()
 	entry, found := c.getEntry(shard, key)
@@ -108,7 +108,7 @@ func (c *CLRU) Get(key Key) (value interface{}, found bool) {
 	return
 }
 
-func (c *CLRU) GetEntry(key Key) (entry *Entry, found bool) {
+func (c *CLRU) GetEntry(key string) (entry *Entry, found bool) {
 	shard := c.getShard(key)
 	shard.Lock()
 	entry, found = c.getEntry(shard, key)
@@ -117,7 +117,7 @@ func (c *CLRU) GetEntry(key Key) (entry *Entry, found bool) {
 }
 
 // better not to lock in the callback
-func (c *CLRU) Update(key Key, op Callback) (entry *Entry, found bool) {
+func (c *CLRU) Update(key string, op Callback) (entry *Entry, found bool) {
 	shard := c.getShard(key)
 	shard.Lock()
 	if entry, found = c.getEntry(shard, key); found {
@@ -127,7 +127,7 @@ func (c *CLRU) Update(key Key, op Callback) (entry *Entry, found bool) {
 	return
 }
 
-func (c *CLRU) Evict(key Key) {
+func (c *CLRU) Evict(key string) {
 	shard := c.getShard(key)
 	shard.Lock()
 	if el, found := shard.Get(key); found {
@@ -161,6 +161,16 @@ func (c *CLRU) Iter() <-chan *Entry {
 		close(ch)
 	}()
 	return ch
+}
+
+func (c *CLRU) Flush() {
+	for i := 0; i < NUM_SHARD; i++ {
+		shard := c.shards[i]
+		shard.Lock()
+		shard.lst = list.New()
+		shard.table = make(map[string]*list.Element)
+		shard.Unlock()
+	}
 }
 
 func (c *CLRU) Load(r io.Reader) error {

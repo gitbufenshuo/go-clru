@@ -4,6 +4,7 @@ import (
 	// "fmt"
 	"os"
 	"runtime"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -85,6 +86,20 @@ func TestTTL(t *testing.T) {
 	}
 }
 
+func TestFlush(t *testing.T) {
+	c := New(1, 100*time.Millisecond)
+	c.Add("k1", "v1")
+	c.Add("k2", "v2")
+	c.Add("k3", "v3")
+	if c.Len() != 3 {
+		t.Fatal("len not work")
+	}
+	c.Flush()
+	if c.Len() != 0 {
+		t.Fatal("flush not work")
+	}
+}
+
 func TestSerialize(t *testing.T) {
 	var err error
 	c := New(1, NoExpiration)
@@ -119,22 +134,36 @@ func TestSerialize(t *testing.T) {
 
 func BenchmarkAdd(b *testing.B) {
 	var wg sync.WaitGroup
-	core := runtime.NumCPU()
 	c := New(10000, NoExpiration)
+	core := runtime.NumCPU()
+	chanNum := core * 4
 	ch := make(chan int, 100000000)
-	for i := 0; i < core*4; i++ {
+	go func() {
+		for i := 0; i < b.N; i++ {
+			ch <- i
+		}
+	}()
+	time.Sleep(1 * time.Millisecond)
+	count := 0
+	for i := 0; i < chanNum; i++ {
 		wg.Add(1)
 		go func() {
-			for i := range ch {
-				c.Add(Key(i), i)
+		loop:
+			for {
+				select {
+				case j := <-ch:
+					key := strconv.Itoa(j)
+					c.Add(key, j)
+				default:
+					count += 1
+					if count == chanNum {
+						close(ch)
+					}
+					break loop
+				}
 			}
 			wg.Done()
 		}()
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		ch <- i
-	}
-	close(ch)
 	wg.Wait()
 }

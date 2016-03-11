@@ -8,14 +8,14 @@ import (
 type lruShard struct {
 	sync.Mutex
 	lst   *list.List
-	table map[Key]*list.Element
+	table map[string]*list.Element
 }
 
 func newShard() *lruShard {
-	return &lruShard{lst: list.New(), table: make(map[Key]*list.Element)}
+	return &lruShard{lst: list.New(), table: make(map[string]*list.Element)}
 }
 
-func (s *lruShard) Get(key Key) (el *list.Element, found bool) {
+func (s *lruShard) Get(key string) (el *list.Element, found bool) {
 	el, found = s.table[key]
 	return
 }
